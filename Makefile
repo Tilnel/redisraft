@@ -7,7 +7,14 @@ LIB = -I libs
 INC = -I include
 GCOV_CFLAGS = -fprofile-arcs -ftest-coverage
 SHELL  = /bin/bash
-CFLAGS += -Iinclude -fno-omit-frame-pointer -fno-common -fsigned-char -g -O2 -fPIC
+CFLAGS += --std=gnu2x -fno-stack-protector -gdwarf-4 \
+					-Iinclude -Werror -Werror=return-type -Werror=uninitialized -Wcast-align \
+					-Wno-pointer-sign -fno-omit-frame-pointer -fno-common -fsigned-char \
+					-Wunused-variable \
+					-Iinclude -g -O0 \
+					-fno-inline -fno-inline-functions -fno-inline-small-functions \
+					-fasynchronous-unwind-tables -fno-optimize-sibling-calls \
+					-funwind-tables -Wl,--eh-frame-hdr,--no-gc-sections
 
 ifdef SANITIZER
 ifeq ($(SANITIZER),address)
@@ -37,7 +44,7 @@ else
 TEST_CFLAGS = $(CFLAGS) $(GCOV_CFLAGS)
 endif
 
-LIB_CFLAGS = $(CFLAGS) -Wextra -Wall -pedantic -Werror
+LIB_CFLAGS = $(CFLAGS) -Wextra -Wall -Werror
 
 UNAME := $(shell uname)
 
@@ -51,7 +58,7 @@ CFLAGS += -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform
 CFLAGS += $(ASANFLAGS)
 CFLAGS += -Wno-nullability-completeness
 else
-SHAREDFLAGS = -shared
+SHAREDFLAGS = -shared 
 SHAREDEXT = so
 endif
 
@@ -176,3 +183,6 @@ do_infer:
 
 clean:
 	-@rm -f src/*.o bin/* src/*.gcda src/*.gcno *.gcno *.gcda *.gcov tests/*.o tests/*.gcda tests/*.gcno tests/raft_cffi.* $(RAFT_CFFI_TARGET) $(LIBRAFT_SHARED) $(LIBRAFT_STATIC)
+
+main: static main.c
+	gcc $(CFLAGS) main.c src/*.o -static -o raft
