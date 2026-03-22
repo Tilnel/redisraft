@@ -28,6 +28,12 @@ static char snapshot_buf[SNAPSHOT_BUF_SIZE];
 static int snapshot_len = 0;
 static int snapshot_in_progress = 0;
 
+static char recv_snapshot_buf[SNAPSHOT_BUF_SIZE];
+static int recv_snapshot_len = 0;
+static int recv_snapshot_in_progress = 0;
+static raft_index_t recv_snapshot_idx = 0;
+static raft_term_t recv_snapshot_term = 0;
+
 static raft_index_t applied_idx = 0;
 
 #define MSG_BUF_SIZE (SNAPSHOT_BUF_SIZE + 256)
@@ -189,6 +195,74 @@ int applylog(raft_server_t *raft, void *user_data, raft_entry_t *entry,
              raft_index_t entry_idx)
 {
   applied_idx = entry_idx;
+  return 0;
+}
+
+int load_snapshot(raft_server_t *raft, void *user_data,
+                  raft_term_t snapshot_term, raft_index_t snapshot_index)
+{
+  int e = raft_begin_load_snapshot(raft, snapshot_term, snapshot_index);
+  if (e != 0)
+    return e;
+
+  memcpy(snapshot_buf, recv_snapshot_buf, recv_snapshot_len);
+  snapshot_len = recv_snapshot_len;
+
+  raft_end_load_snapshot(raft);
+  return 0;
+}
+
+int get_snapshot_chunk(raft_server_t *raft, void *user_data, raft_node_t *node,
+                       raft_size_t offset, raft_snapshot_chunk_t *chunk)
+{
+  if (offset >= snapshot_len)
+  {
+    chunk->len = 0;
+    chunk->last_chunk = 1;
+    return RAFT_ERR_DONE;
+  }
+
+  raft_size_t remaining = snapshot_len - offset;
+  chunk->len = remaining < 32000 ? remaining : 32000;
+  chunk->data = snapshot_buf + offset;
+  chunk->last_chunk = (offset + chunk->len >= snapshot_len);
+
+  return 0;
+}
+
+int store_snapshot_chunk(raft_server_t *raft, void *user_data,
+                         raft_index_t snapshot_index, raft_size_t offset,
+                         raft_snapshot_chunk_t *chunk)
+{
+  if (offset == 0)
+  {
+    recv_snapshot_in_progress = 1;
+    recv_snapshot_len = 0;
+    recv_snapshot_idx = snapshot_index;
+  }
+
+  if (!recv_snapshot_in_progress)
+    return -1;
+
+  if (offset + chunk->len > SNAPSHOT_BUF_SIZE)
+    return -1;
+
+  memcpy(recv_snapshot_buf + offset, chunk->data, chunk->len);
+
+  if (offset + chunk->len > recv_snapshot_len)
+    recv_snapshot_len = offset + chunk->len;
+
+  recv_snapshot_term = chunk->last_chunk ? snapshot_index : 0;
+
+  return 0;
+}
+
+int clear_snapshot(raft_server_t *raft, void *user_data)
+{
+  recv_snapshot_in_progress = 0;
+  recv_snapshot_len = 0;
+  recv_snapshot_idx = 0;
+  recv_snapshot_term = 0;
   return 0;
 }
 
@@ -362,6 +436,16 @@ __attribute__((noinline)) int poll_msg()
         raft_recv_snapshot(raft, (raft_node_t *)sender, &snap_req, &resp);
         break;
       }
+      case RAFT_MSG_SNAPSHOT_RESPONSE:
+      {
+        if (pos + sizeof(raft_snapshot_resp_t) > recvlen)
+          break;
+        raft_snapshot_resp_t resp;
+        memcpy(&resp, recv_buf + pos, sizeof(resp));
+        pos += sizeof(resp);
+        raft_recv_snapshot_response(raft, (raft_node_t *)sender, &resp);
+        break;
+      }
     }
     (void)pos;
   }
@@ -438,6 +522,10 @@ int main(int argc, const char *argv[])
       .applylog = applylog,
       .persist_metadata = persist_metadata,
       .send_snapshot = send_snapshot,
+      .load_snapshot = load_snapshot,
+      .get_snapshot_chunk = get_snapshot_chunk,
+      .store_snapshot_chunk = store_snapshot_chunk,
+      .clear_snapshot = clear_snapshot,
       .timestamp = timestamp,
       .log = logging,
   };

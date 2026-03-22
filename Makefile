@@ -10,7 +10,7 @@ SHELL  = /bin/bash
 CFLAGS += --std=gnu2x -fno-stack-protector -gdwarf-4 \
 					-Iinclude -Werror -Werror=return-type -Werror=uninitialized -Wcast-align \
 					-Wno-pointer-sign -fno-omit-frame-pointer -fno-common -fsigned-char \
-					-Wunused-variable \
+					-Wunused-variable -Wno-unused-function\
 					-Iinclude -g -O0 \
 					-fno-inline -fno-inline-functions -fno-inline-small-functions \
 					-fasynchronous-unwind-tables -fno-optimize-sibling-calls \
