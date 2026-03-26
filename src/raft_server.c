@@ -1886,9 +1886,7 @@ int raft_end_snapshot(raft_server_t *me)
     me->snapshot_last_term = me->next_snapshot_last_term;
 
     /* If needed, remove compacted logs */
-    int e = 0;
-    if (me->log_impl->poll)
-        e = me->log_impl->poll(me->log, me->snapshot_last_idx + 1);
+    int e = me->log_impl->poll(me->log, me->snapshot_last_idx + 1);
     if (e != 0)
         return e;
 

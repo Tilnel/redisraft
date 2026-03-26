@@ -526,7 +526,7 @@ int main(int argc, const char *argv[])
       .get_snapshot_chunk = get_snapshot_chunk,
       .store_snapshot_chunk = store_snapshot_chunk,
       .clear_snapshot = clear_snapshot,
-      .timestamp = timestamp,
+      .timestamp = NULL, // timestamp,
       .log = logging,
   };
   raft_set_callbacks(raft, &callbacks, NULL);
