@@ -15,3 +15,5 @@ cmake-build*
 tests/.raft_cffi_built
 tests/raft_cffi.c
 build/
+/.cache/
+/raft
